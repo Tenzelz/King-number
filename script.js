@@ -94,13 +94,11 @@ const domOtpIds = new Set();
 let modalNumber = null;
 let modalRefreshTimer = null;
 const domModalIds = new Set();
-let isLoading = false;
-let countriesCache = null;
-let numbersCache = new Map();
 
 // ==================== UTILS FUNCTIONS ====================
 function showNotif(msg) {
     const n = document.getElementById('notif');
+    if (!n) return;
     n.innerHTML = `<i class="fas fa-check-circle"></i> ${msg}`;
     n.classList.add('show');
     setTimeout(() => n.classList.remove('show'), 2500);
@@ -131,23 +129,25 @@ function toggleTheme() {
 
 const savedTheme = localStorage.getItem('fn_theme') || 'dark';
 document.body.setAttribute('data-theme', savedTheme);
-const themeIcon = document.getElementById('themeIcon');
-if (themeIcon) {
-    themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+const themeIconElement = document.getElementById('themeIcon');
+if (themeIconElement) {
+    themeIconElement.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 }
 
 // ==================== AUTH FUNCTIONS ====================
-async function handleLogin() {
+window.handleLogin = async function() {
     console.log("🔐 Login button clicked!");
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value.trim();
     const errorDiv = document.getElementById('loginError');
     
-    errorDiv.style.display = 'none';
+    if (errorDiv) errorDiv.style.display = 'none';
     
     if (!email || !password) {
-        errorDiv.textContent = '❌ Please enter email and password';
-        errorDiv.style.display = 'block';
+        if (errorDiv) {
+            errorDiv.textContent = '❌ Please enter email and password';
+            errorDiv.style.display = 'block';
+        }
         return;
     }
     
@@ -156,34 +156,41 @@ async function handleLogin() {
         console.log("✅ Login success:", userCredential.user.email);
     } catch (error) {
         console.error("❌ Login error:", error);
-        errorDiv.textContent = '❌ Invalid email or password';
-        errorDiv.style.display = 'block';
+        if (errorDiv) {
+            errorDiv.textContent = '❌ Invalid email or password';
+            errorDiv.style.display = 'block';
+        }
     }
-}
+};
 
-async function handleLogout() {
+window.handleLogout = async function() {
     console.log("🚪 Logout clicked!");
     await signOut(auth);
-}
+};
 
 function showApp(user, role) {
     currentUser = user;
     currentUserRole = role;
     
-    document.getElementById('authContainer').style.display = 'none';
-    document.getElementById('mainApp').style.display = 'block';
-    document.getElementById('userName').textContent = user?.name || user?.email?.split('@')[0] || 'User';
+    const authContainer = document.getElementById('authContainer');
+    const mainApp = document.getElementById('mainApp');
+    
+    if (authContainer) authContainer.style.display = 'none';
+    if (mainApp) mainApp.style.display = 'block';
+    
+    const userNameSpan = document.getElementById('userName');
+    if (userNameSpan) userNameSpan.textContent = user?.name || user?.email?.split('@')[0] || 'User';
     
     const roleBadge = document.getElementById('userRole');
     const adminBtn = document.getElementById('adminTabBtn');
     
     if (role === 'admin') {
-        roleBadge.innerHTML = '<i class="fas fa-crown"></i> Admin';
-        adminBtn.style.display = 'block';
+        if (roleBadge) roleBadge.innerHTML = '<i class="fas fa-crown"></i> Admin';
+        if (adminBtn) adminBtn.style.display = 'block';
         loadUsersList();
     } else {
-        roleBadge.innerHTML = '<i class="fas fa-user"></i> User';
-        adminBtn.style.display = 'none';
+        if (roleBadge) roleBadge.innerHTML = '<i class="fas fa-user"></i> User';
+        if (adminBtn) adminBtn.style.display = 'none';
     }
     
     loadNumbers();
@@ -192,8 +199,11 @@ function showApp(user, role) {
 }
 
 function hideApp() {
-    document.getElementById('authContainer').style.display = 'flex';
-    document.getElementById('mainApp').style.display = 'none';
+    const authContainer = document.getElementById('authContainer');
+    const mainApp = document.getElementById('mainApp');
+    
+    if (authContainer) authContainer.style.display = 'flex';
+    if (mainApp) mainApp.style.display = 'none';
     if (otpRefreshTimer) {
         clearInterval(otpRefreshTimer);
         otpRefreshTimer = null;
@@ -214,11 +224,11 @@ async function loadUsersList() {
         
         tbody.innerHTML = users.map(u => `
             <tr>
-                <td>${u.uid.substring(0, 8)}...<\/td>
-                <td>${u.email}<\/td>
-                <td>${u.name}<\/td>
-                <td><span style="background:${u.role === 'admin' ? 'var(--accent)' : 'var(--bg-tertiary)'}; padding:4px 12px; border-radius:50px; font-size:11px;">${u.role === 'admin' ? '👑 Admin' : '👤 User'}</span><\/td>
-                <td>${u.uid !== currentUser?.uid ? `<button class="delete-user-btn" data-uid="${u.uid}" data-name="${u.name}">Delete</button>` : 'Current'}<\/td>
+                <td>${u.uid.substring(0, 8)}...</td>
+                <td>${u.email}</td>
+                <td>${u.name}</td>
+                <td><span style="background:${u.role === 'admin' ? 'var(--accent)' : 'var(--bg-tertiary)'}; padding:4px 12px; border-radius:50px; font-size:11px;">${u.role === 'admin' ? '👑 Admin' : '👤 User'}</span></td>
+                <td>${u.uid !== currentUser?.uid ? `<button class="delete-user-btn" data-uid="${u.uid}" data-name="${u.name}">Delete</button>` : 'Current'}</td>
             </tr>
         `).join('');
         
@@ -232,7 +242,7 @@ async function loadUsersList() {
     }
 }
 
-async function createUser() {
+window.createUser = async function() {
     const email = document.getElementById('newEmail').value.trim();
     const name = document.getElementById('newName').value.trim();
     const password = document.getElementById('newPassword').value.trim();
@@ -256,9 +266,9 @@ async function createUser() {
     } catch (error) {
         showNotif('❌ ' + error.message);
     }
-}
+};
 
-async function deleteUser(uid, name) {
+window.deleteUser = async function(uid, name) {
     if (uid === currentUser?.uid) {
         showNotif('❌ Cannot delete yourself');
         return;
@@ -268,35 +278,19 @@ async function deleteUser(uid, name) {
         showNotif(`✅ User ${name} deleted`);
         loadUsersList();
     }
-}
+};
 
-// ==================== OPTIMIZED NUMBERS FUNCTIONS ====================
+// ==================== NUMBERS FUNCTIONS ====================
 async function loadNumbers() {
-    if (isLoading) return;
-    isLoading = true;
-    
     try {
         const res = await fetch(`${API_BASE}/api/numbers`);
         const data = await res.json();
         if (data.success && Array.isArray(data.numbers)) {
             numbers = data.numbers;
-            // Build cache
-            numbersCache.clear();
-            numbers.forEach(n => {
-                const code = n.countryCode || n.country;
-                if (!numbersCache.has(code)) {
-                    numbersCache.set(code, []);
-                }
-                numbersCache.get(code).push(n);
-            });
             renderCountries();
             updateStats();
         }
-    } catch(e) { 
-        console.error(e);
-    } finally {
-        isLoading = false;
-    }
+    } catch(e) { console.error(e); }
 }
 
 function groupByCountry(nums) {
@@ -309,30 +303,22 @@ function groupByCountry(nums) {
     return Array.from(map.values());
 }
 
-// Optimized render with DocumentFragment
 function renderCountries(query = '') {
     const grid = document.getElementById('countriesGrid');
+    if (!grid) return;
+    
     const q = query.toLowerCase().trim();
     let groups = groupByCountry(numbers);
-    
-    if (q) {
-        groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q));
-    }
+    if (q) groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q));
     
     if (!groups.length) {
         grid.innerHTML = '<div class="empty-state"><i class="fas fa-globe"></i><h3>No countries found</h3></div>';
         return;
     }
     
-    // Use DocumentFragment untuk mengurangi reflow
-    const fragment = document.createDocumentFragment();
-    
-    groups.forEach(g => {
+    grid.innerHTML = groups.map(g => {
         const otpCnt = allOtps.filter(o => o.country && g.name && o.country.toLowerCase().includes(g.name.toLowerCase().split(' ')[0])).length;
-        const card = document.createElement('div');
-        card.className = 'country-card';
-        card.setAttribute('data-country', JSON.stringify({code:g.code,name:g.name,flag:g.flag}));
-        card.innerHTML = `
+        return `<div class="country-card" data-country='${JSON.stringify({code:g.code,name:g.name,flag:g.flag})}'>
             <span class="cc-flag">${g.flag}</span>
             <div class="cc-name">${g.name}</div>
             <div class="cc-meta">
@@ -340,15 +326,15 @@ function renderCountries(query = '') {
                 <span class="cc-otp-badge ${otpCnt ? 'visible' : ''}"><i class="fas fa-key"></i> ${otpCnt || ''}</span>
                 <span class="cc-arrow"><i class="fas fa-chevron-right"></i></span>
             </div>
-        `;
-        card.addEventListener('click', (function(countryData) {
-            return function() { openCountry(countryData); };
-        })({code:g.code, name:g.name, flag:g.flag}));
-        fragment.appendChild(card);
-    });
+        </div>`;
+    }).join('');
     
-    grid.innerHTML = '';
-    grid.appendChild(fragment);
+    document.querySelectorAll('.country-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const country = JSON.parse(card.dataset.country);
+            openCountry(country);
+        });
+    });
 }
 
 function openCountry(meta) {
@@ -357,69 +343,58 @@ function openCountry(meta) {
     switchView('country');
 }
 
-// Optimized country detail render
 function renderCountryDetail(meta, numQuery = '') {
-    const countryNums = numbersCache.get(meta.code) || numbers.filter(n => n.countryCode === meta.code);
-    let filteredNums = countryNums;
-    if (numQuery) {
-        filteredNums = countryNums.filter(n => n.number.toLowerCase().includes(numQuery.toLowerCase()));
-    }
+    let countryNums = numbers.filter(n => n.countryCode === meta.code);
+    if (numQuery) countryNums = countryNums.filter(n => n.number.toLowerCase().includes(numQuery.toLowerCase()));
     
     const headerDiv = document.getElementById('countryDetailHeader');
-    headerDiv.innerHTML = `
-        <span class="cdh-flag">${meta.flag}</span>
-        <div class="cdh-info"><h2>${meta.name}</h2><p>${filteredNums.length} numbers available</p></div>
-        <div class="cdh-search"><div class="search-input-wrap"><i class="fas fa-search"></i><input class="search-input" id="countrySearchInput" placeholder="Search numbers..." style="padding-left:44px;"></div></div>
-    `;
+    if (headerDiv) {
+        headerDiv.innerHTML = `
+            <span class="cdh-flag">${meta.flag}</span>
+            <div class="cdh-info"><h2>${meta.name}</h2><p>${countryNums.length} numbers available</p></div>
+            <div class="cdh-search"><div class="search-input-wrap"><i class="fas fa-search"></i><input class="search-input" id="countrySearchInput" placeholder="Search numbers..." style="padding-left:44px;" value="${numQuery.replace(/"/g, '&quot;')}"></div></div>
+        `;
+    }
     
     const countrySearchInput = document.getElementById('countrySearchInput');
     if (countrySearchInput) {
-        countrySearchInput.value = numQuery;
-        // Remove old listener to avoid duplicate
-        const newInput = countrySearchInput.cloneNode(true);
-        countrySearchInput.parentNode.replaceChild(newInput, countrySearchInput);
-        newInput.addEventListener('input', (e) => {
+        countrySearchInput.addEventListener('input', (e) => {
             renderCountryDetail(meta, e.target.value);
         });
     }
     
     const numbersDiv = document.getElementById('numbersList');
-    if (!filteredNums.length) {
+    if (!numbersDiv) return;
+    
+    if (!countryNums.length) {
         numbersDiv.innerHTML = '<div class="empty-state"><i class="fas fa-phone"></i><h3>No numbers found</h3></div>';
         return;
     }
     
-    // Use DocumentFragment untuk numbers
-    const fragment = document.createDocumentFragment();
-    
-    filteredNums.forEach(n => {
-        const card = document.createElement('div');
-        card.className = 'number-card';
-        card.innerHTML = `
+    numbersDiv.innerHTML = countryNums.map(n => `
+        <div class="number-card">
             <div class="number-val"><i class="fas fa-sim-card"></i> ${n.number}</div>
             <div class="number-actions">
                 <button class="btn btn-copy" data-number="${n.number}"><i class="fas fa-copy"></i> Copy</button>
                 <button class="btn btn-otp" data-number="${n.number}" data-country="${meta.name}" data-flag="${meta.flag}"><i class="fas fa-key"></i> OTPs</button>
             </div>
-        `;
-        
-        const copyBtn = card.querySelector('.btn-copy');
-        copyBtn.addEventListener('click', () => copyText(copyBtn.dataset.number, 'Number'));
-        
-        const otpBtn = card.querySelector('.btn-otp');
-        otpBtn.addEventListener('click', () => showNumberOtps(otpBtn.dataset.number, otpBtn.dataset.country, otpBtn.dataset.flag));
-        
-        fragment.appendChild(card);
-    });
+        </div>
+    `).join('');
     
-    numbersDiv.innerHTML = '';
-    numbersDiv.appendChild(fragment);
+    document.querySelectorAll('.btn-copy').forEach(btn => {
+        btn.addEventListener('click', () => copyText(btn.dataset.number, 'Number'));
+    });
+    document.querySelectorAll('.btn-otp').forEach(btn => {
+        btn.addEventListener('click', () => showNumberOtps(btn.dataset.number, btn.dataset.country, btn.dataset.flag));
+    });
 }
 
 function updateStats() {
     const groups = groupByCountry(numbers);
-    document.getElementById('totalNums').textContent = numbers.length;
-    document.getElementById('totalCnts').textContent = groups.length;
+    const totalNums = document.getElementById('totalNums');
+    const totalCnts = document.getElementById('totalCnts');
+    if (totalNums) totalNums.textContent = numbers.length;
+    if (totalCnts) totalCnts.textContent = groups.length;
 }
 
 // ==================== OTPS FUNCTIONS ====================
@@ -438,9 +413,13 @@ async function fetchOtps() {
         
         allOtps = otpsArray.slice(0, 100);
         
-        document.getElementById('totalOtpsStat').textContent = allOtps.length;
-        document.getElementById('otpCount').textContent = allOtps.length;
-        document.getElementById('otpCntCount').textContent = [...new Set(allOtps.map(o => o.country).filter(Boolean))].length;
+        const totalOtpsStat = document.getElementById('totalOtpsStat');
+        const otpCount = document.getElementById('otpCount');
+        const otpCntCount = document.getElementById('otpCntCount');
+        
+        if (totalOtpsStat) totalOtpsStat.textContent = allOtps.length;
+        if (otpCount) otpCount.textContent = allOtps.length;
+        if (otpCntCount) otpCntCount.textContent = [...new Set(allOtps.map(o => o.country).filter(Boolean))].length;
         
         if (currentView === 'otps') {
             populateCountryFilter();
@@ -448,6 +427,7 @@ async function fetchOtps() {
             applyFilter();
         }
         if (currentView === 'home') updateCountryBadges();
+        
         const liveDot = document.querySelector('.live-dot');
         if (liveDot) liveDot.style.background = '#34d39a';
     } catch(e) {
@@ -479,15 +459,14 @@ function makeOtpCard(o, animate = true) {
 
 function insertNewOtpCards() {
     const grid = document.getElementById('otpGrid');
+    if (!grid) return;
+    
     const newItems = allOtps.filter(o => o.id && !domOtpIds.has(o.id));
     
     if (!newItems.length && domOtpIds.size === 0 && grid.querySelector('.empty-state')) return;
     if (newItems.length && grid.querySelector('.empty-state')) grid.innerHTML = '';
     
-    // Batasi jumlah OTP yang ditampilkan untuk performa
-    const itemsToAdd = newItems.slice(0, 20);
-    
-    itemsToAdd.forEach(o => {
+    newItems.slice(0, 20).forEach(o => {
         domOtpIds.add(o.id);
         const div = document.createElement('div');
         div.innerHTML = makeOtpCard(o, true);
@@ -504,7 +483,26 @@ function insertNewOtpCards() {
         }
     });
     
-    // Batasi maksimal 50 OTP card di DOM
     const cards = grid.querySelectorAll('.otp-card');
     if (cards.length > 50) {
-        Array
+        Array.from(cards).slice(50).forEach(c => {
+            domOtpIds.delete(c.dataset.id);
+            c.remove();
+        });
+    }
+}
+
+function applyFilter() {
+    const cf = document.getElementById('otpCountryFilter');
+    const sq = document.getElementById('otpSearch');
+    
+    if (!cf || !sq) return;
+    
+    const countryFilter = cf.value;
+    const searchQuery = sq.value.toLowerCase();
+    
+    const cards = document.querySelectorAll('#otpGrid .otp-card');
+    cards.forEach(card => {
+        const o = allOtps.find(x => x.id == card.dataset.id);
+        if (!o) { card.style.display = 'none'; return; }
+        const country
