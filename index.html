@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>KingNumber • Premium Virtual Numbers & OTP Receiver</title>
+    <meta name="description" content="KingNumber - Premium free virtual phone numbers from 25+ countries. Receive SMS and OTP instantly with Firebase authentication.">
+    <meta name="theme-color" content="#5b7fff">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+
+<!-- LOGIN CONTAINER -->
+<div class="auth-container" id="authContainer">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <div class="crown-icon">
+                <i class="fas fa-crown"></i>
+            </div>
+            <h1>King<span>Number</span></h1>
+            <p>Premium Virtual Numbers & OTP Receiver</p>
+        </div>
+        
+        <div id="loginForm">
+            <div id="loginError" class="auth-error"></div>
+            
+            <div class="input-icon">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="loginEmail" class="auth-input" placeholder="Email address">
+            </div>
+            
+            <div class="input-icon">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="loginPassword" class="auth-input" placeholder="Password">
+            </div>
+            
+            <button class="auth-btn" id="loginBtn">
+                <i class="fas fa-arrow-right"></i> Login
+            </button>
+        </div>
+        
+        <div class="auth-footer">
+            <div class="contact-info">
+                <i class="fab fa-telegram"></i> Need access? Chat <a href="https://t.me/Zerozx_real" target="_blank">@Zerozx_real</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="main-app" id="mainApp">
+    <div class="header">
+        <div class="nav">
+            <div class="logo">
+                <i class="fas fa-crown"></i>
+                King<span>Number</span>
+            </div>
+            <div class="nav-tabs">
+                <button class="tab-btn active" data-view="home"><i class="fas fa-phone"></i> Numbers</button>
+                <button class="tab-btn" data-view="otps"><i class="fas fa-key"></i> OTPs</button>
+                <button class="tab-btn" data-view="admin" id="adminTabBtn" style="display: none;"><i class="fas fa-crown"></i> Admin</button>
+            </div>
+            <div class="nav-right">
+                <div class="user-badge">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userName">User</span>
+                    <span class="role" id="userRole">User</span>
+                </div>
+                <button class="nav-btn" id="themeBtn"><i class="fas fa-sun" id="themeIcon"></i></button>
+                <button class="nav-btn" id="logoutBtn"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="hero">
+            <div class="hero-badge">
+                <i class="fas fa-crown"></i> PREMIUM
+            </div>
+            <h1>Virtual Numbers & OTP Receiver</h1>
+            <p>Get free phone numbers from 25+ countries. Receive SMS & verification codes instantly with Firebase authentication.</p>
+        </div>
+
+        <div class="search-bar">
+            <div class="search-input-wrap">
+                <i class="fas fa-search"></i>
+                <input class="search-input" id="mainSearch" placeholder="Search country or number...">
+            </div>
+            <div class="live-badge"><span class="live-dot"></span> Live</div>
+        </div>
+
+        <!-- HOME VIEW -->
+        <div id="viewHome" class="view-section active">
+            <div class="stats-row">
+                <div class="stat-pill"><span class="stat-num" id="totalNums">0</span><span class="stat-lbl">Numbers</span></div>
+                <div class="stat-pill"><span class="stat-num" id="totalCnts">0</span><span class="stat-lbl">Countries</span></div>
+                <div class="stat-pill"><span class="stat-num" id="totalOtpsStat">0</span><span class="stat-lbl">OTPs Today</span></div>
+            </div>
+            <div class="section-title"><i class="fas fa-globe"></i> SELECT A COUNTRY</div>
+            <div class="countries-grid" id="countriesGrid"><div class="empty-state"><i class="fas fa-globe"></i><h3>Loading...</h3></div></div>
+        </div>
+
+        <!-- COUNTRY VIEW -->
+        <div id="viewCountry" class="view-section">
+            <button class="back-btn" id="backBtn"><i class="fas fa-arrow-left"></i> Back</button>
+            <div class="country-detail-header" id="countryDetailHeader"></div>
+            <div class="section-title"><i class="fas fa-phone-alt"></i> PHONE NUMBERS</div>
+            <div class="numbers-list" id="numbersList"></div>
+        </div>
+
+        <!-- OTPS VIEW -->
+        <div id="viewOtps" class="view-section">
+            <div class="stats-row">
+                <div class="stat-pill"><span class="stat-num" id="otpCount">0</span><span class="stat-lbl">OTPs Today</span></div>
+                <div class="stat-pill"><span class="stat-num" id="otpCntCount">0</span><span class="stat-lbl">Countries</span></div>
+            </div>
+            <div class="otp-filters">
+                <select class="otp-select" id="otpCountryFilter"><option value="all">🌍 All Countries</option></select>
+                <div class="search-input-wrap" style="flex:2;"><i class="fas fa-search"></i><input class="search-input" id="otpSearch" placeholder="Search OTPs..." style="padding-left: 44px;"></div>
+                <button class="refresh-btn" id="refreshOtpsBtn"><i class="fas fa-sync-alt"></i></button>
+            </div>
+            <div class="otp-grid" id="otpGrid"><div class="empty-state"><i class="fas fa-key"></i><h3>No OTPs yet...</h3></div></div>
+        </div>
+
+        <!-- ADMIN VIEW -->
+        <div id="viewAdmin" class="view-section">
+            <div class="admin-panel">
+                <div class="admin-title"><i class="fas fa-crown"></i> Admin Dashboard — User Management</div>
+                <div class="create-form">
+                    <input type="email" id="newEmail" placeholder="Email">
+                    <input type="text" id="newName" placeholder="Full name">
+                    <input type="password" id="newPassword" placeholder="Password">
+                    <select id="newRole"><option value="user">👤 User</option><option value="admin">👑 Admin</option></select>
+                    <button id="createUserBtn"><i class="fas fa-plus"></i> Create User</button>
+                </div>
+                <div class="users-table">
+                    <table>
+                        <thead><tr><th>UID</th><th>Email</th><th>Name</th><th>Role</th><th>Action</th></tr></thead>
+                        <tbody id="usersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-inner">
+            <div class="footer-col">
+                <h4><i class="fas fa-crown"></i> KingNumber</h4>
+                <p>Premium free virtual phone numbers for SMS & OTP verification worldwide. Powered by Firebase.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Quick Links</h4>
+                <a href="#"><i class="fas fa-home"></i> Home</a>
+                <a href="#"><i class="fas fa-info-circle"></i> About</a>
+                <a href="#"><i class="fas fa-question-circle"></i> FAQ</a>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <a href="#"><i class="fas fa-shield-alt"></i> Privacy</a>
+                <a href="#"><i class="fas fa-file-contract"></i> Terms</a>
+            </div>
+            <div class="footer-col">
+                <h4>Community</h4>
+                <a href="https://t.me/Zerozx_real" target="_blank"><i class="fab fa-telegram"></i> Telegram</a>
+            </div>
+        </div>
+        <div class="footer-bottom">© 2026 KingNumber — Premium Virtual Numbers & SMS Receiver with Firebase</div>
+    </footer>
+    
+    <div class="notification" id="notif"></div>
+    <a href="https://t.me/Zerozx_real" target="_blank" class="tg-float"><i class="fab fa-telegram-plane"></i></a>
+</div>
+
+<!-- MODAL -->
+<div class="modal" id="otpModal">
+    <div class="modal-inner">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div class="modal-title" id="modalTitle" style="font-size:18px; font-weight:700;"><i class="fas fa-key"></i> OTPs</div>
+            <button id="closeModalBtn" style="background:var(--bg-tertiary); border:none; width:36px; height:36px; border-radius:50%; cursor:pointer;"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="background:var(--gradient-1); border-radius:var(--radius-md); padding:16px; text-align:center; margin-bottom:20px;">
+            <div style="font-size:12px; opacity:0.8;">Phone Number</div>
+            <div class="modal-number-val" id="modalNum" style="font-family:'JetBrains Mono'; font-size:18px; font-weight:700;"></div>
+        </div>
+        <div class="otp-grid" id="modalOtpList"></div>
+    </div>
+</div>
+
+<!-- JavaScript -->
+<script type="module" src="script.js"></script>
+</body>
+</html>
