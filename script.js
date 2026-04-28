@@ -33,15 +33,14 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ==================== DEFAULT ADMIN (LANGSUNG DI CODE) ====================
+// ==================== DEFAULT ADMIN ====================
 const DEFAULT_ADMIN = {
     email: "admin@kingnumber.com",
-    password: "zerozxadmingtg",
+    password: "admin123",
     name: "Super Admin",
     role: "admin"
 };
 
-// Fungsi untuk membuat default admin jika belum ada
 async function createDefaultAdminIfNotExists() {
     try {
         const usersRef = collection(db, 'users');
@@ -95,6 +94,9 @@ const domOtpIds = new Set();
 let modalNumber = null;
 let modalRefreshTimer = null;
 const domModalIds = new Set();
+let isLoading = false;
+let countriesCache = null;
+let numbersCache = new Map();
 
 // ==================== UTILS FUNCTIONS ====================
 function showNotif(msg) {
@@ -217,7 +219,7 @@ async function loadUsersList() {
                 <td>${u.name}<\/td>
                 <td><span style="background:${u.role === 'admin' ? 'var(--accent)' : 'var(--bg-tertiary)'}; padding:4px 12px; border-radius:50px; font-size:11px;">${u.role === 'admin' ? '👑 Admin' : '👤 User'}</span><\/td>
                 <td>${u.uid !== currentUser?.uid ? `<button class="delete-user-btn" data-uid="${u.uid}" data-name="${u.name}">Delete</button>` : 'Current'}<\/td>
-            </td>
+            </tr>
         `).join('');
         
         document.querySelectorAll('.delete-user-btn').forEach(btn => {
@@ -268,17 +270,33 @@ async function deleteUser(uid, name) {
     }
 }
 
-// ==================== NUMBERS FUNCTIONS ====================
+// ==================== OPTIMIZED NUMBERS FUNCTIONS ====================
 async function loadNumbers() {
+    if (isLoading) return;
+    isLoading = true;
+    
     try {
         const res = await fetch(`${API_BASE}/api/numbers`);
         const data = await res.json();
         if (data.success && Array.isArray(data.numbers)) {
             numbers = data.numbers;
+            // Build cache
+            numbersCache.clear();
+            numbers.forEach(n => {
+                const code = n.countryCode || n.country;
+                if (!numbersCache.has(code)) {
+                    numbersCache.set(code, []);
+                }
+                numbersCache.get(code).push(n);
+            });
             renderCountries();
             updateStats();
         }
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        console.error(e);
+    } finally {
+        isLoading = false;
+    }
 }
 
 function groupByCountry(nums) {
@@ -291,20 +309,30 @@ function groupByCountry(nums) {
     return Array.from(map.values());
 }
 
+// Optimized render with DocumentFragment
 function renderCountries(query = '') {
     const grid = document.getElementById('countriesGrid');
     const q = query.toLowerCase().trim();
     let groups = groupByCountry(numbers);
-    if (q) groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q));
+    
+    if (q) {
+        groups = groups.filter(g => g.name.toLowerCase().includes(q) || g.code.toLowerCase().includes(q));
+    }
     
     if (!groups.length) {
         grid.innerHTML = '<div class="empty-state"><i class="fas fa-globe"></i><h3>No countries found</h3></div>';
         return;
     }
     
-    grid.innerHTML = groups.map(g => {
+    // Use DocumentFragment untuk mengurangi reflow
+    const fragment = document.createDocumentFragment();
+    
+    groups.forEach(g => {
         const otpCnt = allOtps.filter(o => o.country && g.name && o.country.toLowerCase().includes(g.name.toLowerCase().split(' ')[0])).length;
-        return `<div class="country-card" data-country='${JSON.stringify({code:g.code,name:g.name,flag:g.flag})}'>
+        const card = document.createElement('div');
+        card.className = 'country-card';
+        card.setAttribute('data-country', JSON.stringify({code:g.code,name:g.name,flag:g.flag}));
+        card.innerHTML = `
             <span class="cc-flag">${g.flag}</span>
             <div class="cc-name">${g.name}</div>
             <div class="cc-meta">
@@ -312,15 +340,15 @@ function renderCountries(query = '') {
                 <span class="cc-otp-badge ${otpCnt ? 'visible' : ''}"><i class="fas fa-key"></i> ${otpCnt || ''}</span>
                 <span class="cc-arrow"><i class="fas fa-chevron-right"></i></span>
             </div>
-        </div>`;
-    }).join('');
-    
-    document.querySelectorAll('.country-card').forEach(card => {
-        card.addEventListener('click', () => {
-            const country = JSON.parse(card.dataset.country);
-            openCountry(country);
-        });
+        `;
+        card.addEventListener('click', (function(countryData) {
+            return function() { openCountry(countryData); };
+        })({code:g.code, name:g.name, flag:g.flag}));
+        fragment.appendChild(card);
     });
+    
+    grid.innerHTML = '';
+    grid.appendChild(fragment);
 }
 
 function openCountry(meta) {
@@ -329,45 +357,63 @@ function openCountry(meta) {
     switchView('country');
 }
 
+// Optimized country detail render
 function renderCountryDetail(meta, numQuery = '') {
-    let countryNums = numbers.filter(n => n.countryCode === meta.code);
-    if (numQuery) countryNums = countryNums.filter(n => n.number.toLowerCase().includes(numQuery.toLowerCase()));
+    const countryNums = numbersCache.get(meta.code) || numbers.filter(n => n.countryCode === meta.code);
+    let filteredNums = countryNums;
+    if (numQuery) {
+        filteredNums = countryNums.filter(n => n.number.toLowerCase().includes(numQuery.toLowerCase()));
+    }
     
-    document.getElementById('countryDetailHeader').innerHTML = `
+    const headerDiv = document.getElementById('countryDetailHeader');
+    headerDiv.innerHTML = `
         <span class="cdh-flag">${meta.flag}</span>
-        <div class="cdh-info"><h2>${meta.name}</h2><p>${countryNums.length} numbers available</p></div>
+        <div class="cdh-info"><h2>${meta.name}</h2><p>${filteredNums.length} numbers available</p></div>
         <div class="cdh-search"><div class="search-input-wrap"><i class="fas fa-search"></i><input class="search-input" id="countrySearchInput" placeholder="Search numbers..." style="padding-left:44px;"></div></div>
     `;
     
     const countrySearchInput = document.getElementById('countrySearchInput');
     if (countrySearchInput) {
         countrySearchInput.value = numQuery;
-        countrySearchInput.addEventListener('input', (e) => {
+        // Remove old listener to avoid duplicate
+        const newInput = countrySearchInput.cloneNode(true);
+        countrySearchInput.parentNode.replaceChild(newInput, countrySearchInput);
+        newInput.addEventListener('input', (e) => {
             renderCountryDetail(meta, e.target.value);
         });
     }
     
-    if (!countryNums.length) {
-        document.getElementById('numbersList').innerHTML = '<div class="empty-state"><i class="fas fa-phone"></i><h3>No numbers found</h3></div>';
+    const numbersDiv = document.getElementById('numbersList');
+    if (!filteredNums.length) {
+        numbersDiv.innerHTML = '<div class="empty-state"><i class="fas fa-phone"></i><h3>No numbers found</h3></div>';
         return;
     }
     
-    document.getElementById('numbersList').innerHTML = countryNums.map(n => `
-        <div class="number-card">
+    // Use DocumentFragment untuk numbers
+    const fragment = document.createDocumentFragment();
+    
+    filteredNums.forEach(n => {
+        const card = document.createElement('div');
+        card.className = 'number-card';
+        card.innerHTML = `
             <div class="number-val"><i class="fas fa-sim-card"></i> ${n.number}</div>
             <div class="number-actions">
                 <button class="btn btn-copy" data-number="${n.number}"><i class="fas fa-copy"></i> Copy</button>
                 <button class="btn btn-otp" data-number="${n.number}" data-country="${meta.name}" data-flag="${meta.flag}"><i class="fas fa-key"></i> OTPs</button>
             </div>
-        </div>
-    `).join('');
+        `;
+        
+        const copyBtn = card.querySelector('.btn-copy');
+        copyBtn.addEventListener('click', () => copyText(copyBtn.dataset.number, 'Number'));
+        
+        const otpBtn = card.querySelector('.btn-otp');
+        otpBtn.addEventListener('click', () => showNumberOtps(otpBtn.dataset.number, otpBtn.dataset.country, otpBtn.dataset.flag));
+        
+        fragment.appendChild(card);
+    });
     
-    document.querySelectorAll('.btn-copy').forEach(btn => {
-        btn.addEventListener('click', () => copyText(btn.dataset.number, 'Number'));
-    });
-    document.querySelectorAll('.btn-otp').forEach(btn => {
-        btn.addEventListener('click', () => showNumberOtps(btn.dataset.number, btn.dataset.country, btn.dataset.flag));
-    });
+    numbersDiv.innerHTML = '';
+    numbersDiv.appendChild(fragment);
 }
 
 function updateStats() {
@@ -383,14 +429,14 @@ async function fetchOtps() {
     lastOtpFetch = now;
     
     try {
-        const res = await fetch(`${API_BASE}/api/tops?limit=200`);
+        const res = await fetch(`${API_BASE}/api/tops?limit=100`);
         const data = await res.json();
         let otpsArray = [];
         if (data.success && Array.isArray(data.otps)) otpsArray = data.otps;
         else if (Array.isArray(data)) otpsArray = data;
         else if (data.tops && Array.isArray(data.tops)) otpsArray = data.tops;
         
-        allOtps = otpsArray.slice(0, 200);
+        allOtps = otpsArray.slice(0, 100);
         
         document.getElementById('totalOtpsStat').textContent = allOtps.length;
         document.getElementById('otpCount').textContent = allOtps.length;
@@ -402,9 +448,11 @@ async function fetchOtps() {
             applyFilter();
         }
         if (currentView === 'home') updateCountryBadges();
-        document.querySelector('.live-dot').style.background = '#34d39a';
+        const liveDot = document.querySelector('.live-dot');
+        if (liveDot) liveDot.style.background = '#34d39a';
     } catch(e) {
-        document.querySelector('.live-dot').style.background = '#ff5a5a';
+        const liveDot = document.querySelector('.live-dot');
+        if (liveDot) liveDot.style.background = '#ff5a5a';
     }
 }
 
@@ -436,231 +484,27 @@ function insertNewOtpCards() {
     if (!newItems.length && domOtpIds.size === 0 && grid.querySelector('.empty-state')) return;
     if (newItems.length && grid.querySelector('.empty-state')) grid.innerHTML = '';
     
-    newItems.forEach(o => {
+    // Batasi jumlah OTP yang ditampilkan untuk performa
+    const itemsToAdd = newItems.slice(0, 20);
+    
+    itemsToAdd.forEach(o => {
         domOtpIds.add(o.id);
         const div = document.createElement('div');
         div.innerHTML = makeOtpCard(o, true);
-        grid.prepend(div.firstElementChild);
+        const card = div.firstElementChild;
+        grid.prepend(card);
         
-        const otpCodeBlock = div.querySelector('.otp-code-block');
+        const otpCodeBlock = card.querySelector('.otp-code-block');
         if (otpCodeBlock) {
             otpCodeBlock.addEventListener('click', () => copyText(otpCodeBlock.dataset.otp, 'OTP'));
         }
-        const copyMsgBtn = div.querySelector('.otp-copy-btn');
+        const copyMsgBtn = card.querySelector('.otp-copy-btn');
         if (copyMsgBtn) {
             copyMsgBtn.addEventListener('click', () => copyText(copyMsgBtn.dataset.message, 'Message'));
         }
     });
     
+    // Batasi maksimal 50 OTP card di DOM
     const cards = grid.querySelectorAll('.otp-card');
-    if (cards.length > 100) {
-        Array.from(cards).slice(100).forEach(c => {
-            domOtpIds.delete(c.dataset.id);
-            c.remove();
-        });
-    }
-}
-
-function applyFilter() {
-    const cf = document.getElementById('otpCountryFilter').value;
-    const sq = document.getElementById('otpSearch').value.toLowerCase();
-    
-    document.querySelectorAll('#otpGrid .otp-card').forEach(card => {
-        const o = allOtps.find(x => x.id == card.dataset.id);
-        if (!o) { card.style.display = 'none'; return; }
-        const countryOk = cf === 'all' || (o.country || '').toLowerCase() === cf.toLowerCase();
-        const searchOk = !sq || (o.number || '').toLowerCase().includes(sq) || (o.sender || '').toLowerCase().includes(sq) || (o.message || '').toLowerCase().includes(sq);
-        card.style.display = (countryOk && searchOk) ? '' : 'none';
-    });
-}
-
-function renderOtps() {
-    applyFilter();
-}
-
-function populateCountryFilter() {
-    const csel = document.getElementById('otpCountryFilter');
-    const cur = csel.value;
-    const countries = [...new Set(allOtps.map(o => o.country).filter(Boolean))].sort();
-    csel.innerHTML = '<option value="all">🌍 All Countries</option>' + countries.map(c => `<option value="${c}"${c === cur ? ' selected' : ''}>${c}</option>`).join('');
-}
-
-function updateCountryBadges() {
-    document.querySelectorAll('.country-card').forEach(card => {
-        const nameElem = card.querySelector('.cc-name');
-        if (!nameElem) return;
-        const name = nameElem.textContent.trim().toLowerCase().split(' ')[0];
-        const cnt = allOtps.filter(o => o.country && o.country.toLowerCase().includes(name)).length;
-        const badge = card.querySelector('.cc-otp-badge');
-        if (badge) {
-            if (cnt > 0) {
-                badge.innerHTML = `<i class="fas fa-key"></i> ${cnt}`;
-                badge.classList.add('visible');
-            } else {
-                badge.classList.remove('visible');
-            }
-        }
-    });
-}
-
-function startAutoRefresh() {
-    if (otpRefreshTimer) clearInterval(otpRefreshTimer);
-    otpRefreshTimer = setInterval(() => {
-        if (!document.hidden) fetchOtps();
-    }, 5000);
-}
-
-function manualRefresh() {
-    lastOtpFetch = 0;
-    fetchOtps();
-}
-
-// ==================== MODAL FUNCTIONS ====================
-async function fetchModalOtps() {
-    if (!modalNumber) return;
-    
-    try {
-        const res = await fetch(`${API_BASE}/api/tops?limit=500`);
-        const data = await res.json();
-        let all = Array.isArray(data.otps) ? data.otps : (Array.isArray(data) ? data : (data.tops || []));
-        const matches = all.filter(o => (o.number || o.phone) === modalNumber);
-        const grid = document.getElementById('modalOtpList');
-        const newItems = matches.filter(o => o.id && !domModalIds.has(o.id));
-        
-        if (!newItems.length && domModalIds.size === 0 && grid.querySelector('.empty-state')) return;
-        if (newItems.length && grid.querySelector('.empty-state')) grid.innerHTML = '';
-        
-        newItems.forEach(o => {
-            domModalIds.add(o.id);
-            const div = document.createElement('div');
-            div.innerHTML = makeOtpCard(o, false);
-            grid.prepend(div.firstElementChild);
-            
-            const otpCodeBlock = div.querySelector('.otp-code-block');
-            if (otpCodeBlock) {
-                otpCodeBlock.addEventListener('click', () => copyText(otpCodeBlock.dataset.otp, 'OTP'));
-            }
-            const copyMsgBtn = div.querySelector('.otp-copy-btn');
-            if (copyMsgBtn) {
-                copyMsgBtn.addEventListener('click', () => copyText(copyMsgBtn.dataset.message, 'Message'));
-            }
-        });
-    } catch(e) {}
-}
-
-function showNumberOtps(number, country, flag) {
-    modalNumber = number;
-    domModalIds.clear();
-    document.getElementById('modalTitle').innerHTML = `<i class="fas fa-key"></i> ${flag} ${country}`;
-    document.getElementById('modalNum').textContent = number;
-    document.getElementById('modalOtpList').innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Waiting for OTPs...</h3></div>';
-    fetchModalOtps();
-    document.getElementById('otpModal').classList.add('open');
-    
-    if (modalRefreshTimer) clearInterval(modalRefreshTimer);
-    modalRefreshTimer = setInterval(fetchModalOtps, 4000);
-}
-
-function closeModal() {
-    document.getElementById('otpModal').classList.remove('open');
-    if (modalRefreshTimer) {
-        clearInterval(modalRefreshTimer);
-        modalRefreshTimer = null;
-    }
-    modalNumber = null;
-    domModalIds.clear();
-}
-
-// ==================== VIEW FUNCTIONS ====================
-function switchView(view) {
-    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    currentView = view;
-    
-    if (view === 'home') {
-        document.getElementById('viewHome').classList.add('active');
-        document.querySelector('.tab-btn').classList.add('active');
-    } else if (view === 'country') {
-        document.getElementById('viewCountry').classList.add('active');
-        document.querySelector('.tab-btn').classList.add('active');
-    } else if (view === 'otps') {
-        document.getElementById('viewOtps').classList.add('active');
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-        fetchOtps();
-    } else if (view === 'admin') {
-        document.getElementById('viewAdmin').classList.add('active');
-        document.querySelectorAll('.tab-btn')[2].classList.add('active');
-        loadUsersList();
-    }
-    document.getElementById('mainSearch').value = '';
-}
-
-function goBack() {
-    selectedCountry = null;
-    switchView('home');
-    renderCountries();
-}
-
-function handleSearch() {
-    const q = document.getElementById('mainSearch').value.trim();
-    if (currentView === 'home') {
-        renderCountries(q);
-    }
-}
-
-// ==================== EVENT LISTENERS ====================
-document.getElementById('loginBtn').addEventListener('click', handleLogin);
-document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-document.getElementById('themeBtn').addEventListener('click', toggleTheme);
-document.getElementById('backBtn').addEventListener('click', goBack);
-document.getElementById('refreshOtpsBtn').addEventListener('click', manualRefresh);
-document.getElementById('createUserBtn').addEventListener('click', createUser);
-document.getElementById('closeModalBtn').addEventListener('click', closeModal);
-document.getElementById('mainSearch').addEventListener('input', handleSearch);
-document.getElementById('otpCountryFilter').addEventListener('change', renderOtps);
-document.getElementById('otpSearch').addEventListener('input', renderOtps);
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchView(btn.dataset.view));
-});
-
-document.getElementById('otpModal').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('otpModal')) closeModal();
-});
-
-// ==================== AUTH STATE LISTENER ====================
-onAuthStateChanged(auth, async (user) => {
-    console.log("📡 Auth state changed:", user ? "User logged in" : "No user");
-    
-    await createDefaultAdminIfNotExists();
-    
-    if (user) {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        let userData, userRole;
-        
-        if (userDoc.exists()) {
-            userData = { uid: user.uid, ...userDoc.data() };
-            userRole = userData.role;
-        } else {
-            if (user.email === DEFAULT_ADMIN.email) {
-                userRole = DEFAULT_ADMIN.role;
-                userData = { uid: user.uid, email: user.email, name: DEFAULT_ADMIN.name, role: DEFAULT_ADMIN.role };
-            } else {
-                userRole = 'user';
-                userData = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
-            }
-            await setDoc(doc(db, 'users', user.uid), { 
-                email: user.email, 
-                name: userData.name, 
-                role: userRole, 
-                createdAt: new Date().toISOString() 
-            });
-        }
-        showApp(userData, userRole);
-    } else {
-        if (document.getElementById('mainApp').style.display !== 'none') {
-            hideApp();
-        }
-    }
-});
-
-console.log('👑 KingNumber App - Ready!');
+    if (cards.length > 50) {
+        Array
