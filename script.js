@@ -36,7 +36,7 @@ const db = getFirestore(app);
 // ==================== DEFAULT ADMIN (LANGSUNG DI CODE) ====================
 const DEFAULT_ADMIN = {
     email: "admin@kingnumber.com",
-    password: "admin123",
+    password: "zerozxadmingtg",
     name: "Super Admin",
     role: "admin"
 };
@@ -491,4 +491,176 @@ function updateCountryBadges() {
         if (!nameElem) return;
         const name = nameElem.textContent.trim().toLowerCase().split(' ')[0];
         const cnt = allOtps.filter(o => o.country && o.country.toLowerCase().includes(name)).length;
-        const badge = card.q
+        const badge = card.querySelector('.cc-otp-badge');
+        if (badge) {
+            if (cnt > 0) {
+                badge.innerHTML = `<i class="fas fa-key"></i> ${cnt}`;
+                badge.classList.add('visible');
+            } else {
+                badge.classList.remove('visible');
+            }
+        }
+    });
+}
+
+function startAutoRefresh() {
+    if (otpRefreshTimer) clearInterval(otpRefreshTimer);
+    otpRefreshTimer = setInterval(() => {
+        if (!document.hidden) fetchOtps();
+    }, 5000);
+}
+
+function manualRefresh() {
+    lastOtpFetch = 0;
+    fetchOtps();
+}
+
+// ==================== MODAL FUNCTIONS ====================
+async function fetchModalOtps() {
+    if (!modalNumber) return;
+    
+    try {
+        const res = await fetch(`${API_BASE}/api/tops?limit=500`);
+        const data = await res.json();
+        let all = Array.isArray(data.otps) ? data.otps : (Array.isArray(data) ? data : (data.tops || []));
+        const matches = all.filter(o => (o.number || o.phone) === modalNumber);
+        const grid = document.getElementById('modalOtpList');
+        const newItems = matches.filter(o => o.id && !domModalIds.has(o.id));
+        
+        if (!newItems.length && domModalIds.size === 0 && grid.querySelector('.empty-state')) return;
+        if (newItems.length && grid.querySelector('.empty-state')) grid.innerHTML = '';
+        
+        newItems.forEach(o => {
+            domModalIds.add(o.id);
+            const div = document.createElement('div');
+            div.innerHTML = makeOtpCard(o, false);
+            grid.prepend(div.firstElementChild);
+            
+            const otpCodeBlock = div.querySelector('.otp-code-block');
+            if (otpCodeBlock) {
+                otpCodeBlock.addEventListener('click', () => copyText(otpCodeBlock.dataset.otp, 'OTP'));
+            }
+            const copyMsgBtn = div.querySelector('.otp-copy-btn');
+            if (copyMsgBtn) {
+                copyMsgBtn.addEventListener('click', () => copyText(copyMsgBtn.dataset.message, 'Message'));
+            }
+        });
+    } catch(e) {}
+}
+
+function showNumberOtps(number, country, flag) {
+    modalNumber = number;
+    domModalIds.clear();
+    document.getElementById('modalTitle').innerHTML = `<i class="fas fa-key"></i> ${flag} ${country}`;
+    document.getElementById('modalNum').textContent = number;
+    document.getElementById('modalOtpList').innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Waiting for OTPs...</h3></div>';
+    fetchModalOtps();
+    document.getElementById('otpModal').classList.add('open');
+    
+    if (modalRefreshTimer) clearInterval(modalRefreshTimer);
+    modalRefreshTimer = setInterval(fetchModalOtps, 4000);
+}
+
+function closeModal() {
+    document.getElementById('otpModal').classList.remove('open');
+    if (modalRefreshTimer) {
+        clearInterval(modalRefreshTimer);
+        modalRefreshTimer = null;
+    }
+    modalNumber = null;
+    domModalIds.clear();
+}
+
+// ==================== VIEW FUNCTIONS ====================
+function switchView(view) {
+    document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    currentView = view;
+    
+    if (view === 'home') {
+        document.getElementById('viewHome').classList.add('active');
+        document.querySelector('.tab-btn').classList.add('active');
+    } else if (view === 'country') {
+        document.getElementById('viewCountry').classList.add('active');
+        document.querySelector('.tab-btn').classList.add('active');
+    } else if (view === 'otps') {
+        document.getElementById('viewOtps').classList.add('active');
+        document.querySelectorAll('.tab-btn')[1].classList.add('active');
+        fetchOtps();
+    } else if (view === 'admin') {
+        document.getElementById('viewAdmin').classList.add('active');
+        document.querySelectorAll('.tab-btn')[2].classList.add('active');
+        loadUsersList();
+    }
+    document.getElementById('mainSearch').value = '';
+}
+
+function goBack() {
+    selectedCountry = null;
+    switchView('home');
+    renderCountries();
+}
+
+function handleSearch() {
+    const q = document.getElementById('mainSearch').value.trim();
+    if (currentView === 'home') {
+        renderCountries(q);
+    }
+}
+
+// ==================== EVENT LISTENERS ====================
+document.getElementById('loginBtn').addEventListener('click', handleLogin);
+document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+document.getElementById('backBtn').addEventListener('click', goBack);
+document.getElementById('refreshOtpsBtn').addEventListener('click', manualRefresh);
+document.getElementById('createUserBtn').addEventListener('click', createUser);
+document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+document.getElementById('mainSearch').addEventListener('input', handleSearch);
+document.getElementById('otpCountryFilter').addEventListener('change', renderOtps);
+document.getElementById('otpSearch').addEventListener('input', renderOtps);
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+document.getElementById('otpModal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('otpModal')) closeModal();
+});
+
+// ==================== AUTH STATE LISTENER ====================
+onAuthStateChanged(auth, async (user) => {
+    console.log("📡 Auth state changed:", user ? "User logged in" : "No user");
+    
+    await createDefaultAdminIfNotExists();
+    
+    if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        let userData, userRole;
+        
+        if (userDoc.exists()) {
+            userData = { uid: user.uid, ...userDoc.data() };
+            userRole = userData.role;
+        } else {
+            if (user.email === DEFAULT_ADMIN.email) {
+                userRole = DEFAULT_ADMIN.role;
+                userData = { uid: user.uid, email: user.email, name: DEFAULT_ADMIN.name, role: DEFAULT_ADMIN.role };
+            } else {
+                userRole = 'user';
+                userData = { uid: user.uid, email: user.email, name: user.email.split('@')[0], role: 'user' };
+            }
+            await setDoc(doc(db, 'users', user.uid), { 
+                email: user.email, 
+                name: userData.name, 
+                role: userRole, 
+                createdAt: new Date().toISOString() 
+            });
+        }
+        showApp(userData, userRole);
+    } else {
+        if (document.getElementById('mainApp').style.display !== 'none') {
+            hideApp();
+        }
+    }
+});
+
+console.log('👑 KingNumber App - Ready!');
